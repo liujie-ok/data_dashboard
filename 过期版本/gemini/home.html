@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>串口实时温度曲线</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- 【关键】引入 Chart.js 图表库 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="card">
+        <h2>📈 传感器实时曲线监控</h2>
+        <button id="connect-btn">🔌 连接单片机串口</button>
+        <div id="sensor-value" style="margin: 15px 0; font-size: 24px;">当前温度: -- °C</div>
+        
+        <!-- 【关键】图表放置的画布容器 -->
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+        
+        <p id="status-text" style="font-size: 14px; color: #94a3b8;">请先点击连接硬件</p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

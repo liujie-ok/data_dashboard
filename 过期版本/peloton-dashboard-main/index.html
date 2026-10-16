@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Peloton Live Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #141a22;
+    --accent: #ff3347;
+    --accent-2: #00d2ff;
+    --text: #e8eef5;
+    --muted: #7b8794;
+    --good: #4ade80;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid #1f2730;
+  }
+  h1 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+  h1 span { color: var(--accent); }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button.secondary { background: #2a3441; color: var(--text); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: #1f2730;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--bad);
+  }
+  .dot.connected { background: var(--good); }
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .metric {
+    background: var(--panel);
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    border: 1px solid #1f2730;
+  }
+  .metric .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .metric .value {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .metric .unit {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    background: var(--panel);
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #1f2730;
+    margin-bottom: 24px;
+  }
+  .totals .item { text-align: center; }
+  .totals .item .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .totals .item .value {
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .log-panel {
+    background: var(--panel);
+    border-radius: 12px;
+    border: 1px solid #1f2730;
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+  .log-panel h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  #log {
+    height: 200px;
+    overflow-y: auto;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 12px;
+    background: #0b0f14;
+    padding: 12px;
+    border-radius: 6px;
+    color: #9aa5b1;
+  }
+  #log .err { color: var(--bad); }
+  #log .ok { color: var(--good); }
+  .footer-note {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 32px;
+  }
+  .footer-note code {
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .unsupported {
+    background: var(--bad);
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PELOTON <span>LIVE</span></h1>
+  <div class="controls">
+    <span class="status"><span class="dot" id="statusDot"></span><span id="statusText">Disconnected</span></span>
+    <button id="connectBtn">Connect Bike</button>
+    <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+    <button id="resetBtn" class="secondary">Reset Totals</button>
+    <button id="exportBtn" class="secondary">Export CSV</button>
+  </div>
+</header>
+
+<main>
+  <div class="unsupported" id="unsupported">
+    Your browser does not support the Web Serial API. Please use Chrome, Edge, or Opera (desktop).
+  </div>
+
+  <div class="grid">
+    <div class="metric">
+      <div class="label">Cadence</div>
+      <div class="value" id="cadence">0</div>
+      <div class="unit">RPM</div>
+    </div>
+    <div class="metric">
+      <div class="label">Resistance</div>
+      <div class="value" id="resistance">0</div>
+      <div class="unit">%</div>
+    </div>
+    <div class="metric">
+      <div class="label">Power</div>
+      <div class="value" id="power">0</div>
+      <div class="unit">WATTS</div>
+    </div>
+    <div class="metric">
+      <div class="label">Speed</div>
+      <div class="value" id="speed">0.0</div>
+      <div class="unit">MPH</div>
+    </div>
+  </div>
+
+  <div class="totals">
+    <div class="item">
+      <div class="label">Time</div>
+      <div class="value" id="elapsed">00:00</div>
+    </div>
+    <div class="item">
+      <div class="label">Distance</div>
+      <div class="value" id="distance">0.00 mi</div>
+    </div>
+    <div class="item">
+      <div class="label">Calories</div>
+      <div class="value" id="calories">0</div>
+    </div>
+    <div class="item">
+      <div class="label">Avg Power</div>
+      <div class="value" id="avgPower">0 W</div>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <h3>Serial Log</h3>
+    <div id="log"></div>
+  </div>
+
+  <div class="footer-note">
+    Connect a 3.3V USB-to-TTL adapter to the bike's data cable
+    (TX→RX, RX→TX, GND→GND). Default baud: <code>19200</code>.
+  </div>
+</main>
+
+<script>
+  // -------- DOM refs --------
+  const $ = id => document.getElementById(id);
+  const cadenceEl = $('cadence');
+  const resistanceEl = $('resistance');
+  const powerEl = $('power');
+  const speedEl = $('speed');
+  const elapsedEl = $('elapsed');
+  const distanceEl = $('distance');
+  const caloriesEl = $('calories');
+  const avgPowerEl = $('avgPower');
+  const logEl = $('log');
+  const statusDot = $('statusDot');
+  const statusText = $('statusText');
+  const connectBtn = $('connectBtn');
+  const disconnectBtn = $('disconnectBtn');
+  const resetBtn = $('resetBtn');
+  const exportBtn = $('exportBtn');
+
+  // -------- Browser support check --------
+  if (!('serial' in navigator)) {
+    $('unsupported').style.display = 'block';
+    connectBtn.disabled = true;
+  }
+
+  // -------- State --------
+  let port = null;
+  let reader = null;
+  let keepReading = false;
+  let buffer = new Uint8Array(0);
+  let session = {
+    startTime: null,
+    samples: [],         // {t, cadence, resistance, power}
+    powerSum: 0,
+    powerCount: 0,
+    distanceMi: 0,
+    calories: 0,
+    lastSampleTime: null,
+  };
+
+  // -------- Logging --------
+  function log(msg, cls = '') {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    const ts = new Date().toLocaleTimeString();
+    line.textContent = `[${ts}] ${msg}`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    if (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
+  }
+
+  // -------- Connect / disconnect --------
+  connectBtn.addEventListener('click', async () => {
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({
+        baudRate: 19200,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none',
+      });
+      statusDot.classList.add('connected');
+      statusText.textContent = 'Connected';
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      log('Connected at 19200 baud', 'ok');
+      session.startTime = Date.now();
+      session.lastSampleTime = Date.now();
+      keepReading = true;
+      readLoop();
+    } catch (e) {
+      log('Connection error: ' + e.message, 'err');
+    }
+  });
+
+  disconnectBtn.addEventListener('click', async () => {
+    keepReading = false;
+    if (reader) {
+      try { await reader.cancel(); } catch (e) {}
+    }
+    if (port) {
+      try { await port.close(); } catch (e) {}
+    }
+    port = null;
+    reader = null;
+    statusDot.classList.remove('connected');
+    statusText.textContent = 'Disconnected';
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    log('Disconnected');
+  });
+
+  resetBtn.addEventListener('click', () => {
+    session = {
+      startTime: Date.now(),
+      samples: [],
+      powerSum: 0,
+      powerCount: 0,
+      distanceMi: 0,
+      calories: 0,
+      lastSampleTime: Date.now(),
+    };
+    log('Totals reset');
+    updateTotals();
+  });
+
+  exportBtn.addEventListener('click', () => {
+    if (session.samples.length === 0) {
+      log('No data to export', 'err');
+      return;
+    }
+    const rows = [['time_s', 'cadence_rpm', 'resistance_pct', 'power_w']];
+    session.samples.forEach(s => rows.push([s.t, s.cadence, s.resistance, s.power]));
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `peloton-ride-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    log(`Exported ${session.samples.length} samples`, 'ok');
+  });
+
+  // -------- Read loop --------
+  async function readLoop() {
+    while (port && port.readable && keepReading) {
+      reader = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) ingest(value);
+        }
+      } catch (e) {
+        log('Read error: ' + e.message, 'err');
+      } finally {
+        reader.releaseLock();
+        reader = null;
+      }
+    }
+  }
+
+  // -------- Peloton serial protocol parser --------
+  // Reverse-engineered original Peloton Bike protocol:
+  //   Frames are delimited by 0xF1 (start) ... 0xF6 (end).
+  //   Between markers: [type][length][digits...][checksum]
+  //     type 0x41 ('A') = cadence (RPM)
+  //     type 0x44 ('D') = resistance (raw value, mapped to 0–100%)
+  //     type 0x4A ('J') = power (watts * 10, e.g., 1234 → 123.4 W)
+  //   Digits are ASCII, sent reversed (little-endian-ish), one byte per decimal digit.
+  //   Checksum = sum of digit bytes & 0xFF.
+  function ingest(chunk) {
+    // append to rolling buffer
+    const merged = new Uint8Array(buffer.length + chunk.length);
+    merged.set(buffer, 0);
+    merged.set(chunk, buffer.length);
+    buffer = merged;
+
+    // scan for full frames: F1 ... F6
+    let start = -1;
+    for (let i = 0; i < buffer.length; i++) {
+      if (buffer[i] === 0xF1) start = i;
+      else if (buffer[i] === 0xF6 && start !== -1) {
+        const frame = buffer.slice(start + 1, i);
+        parseFrame(frame);
+        start = -1;
+      }
+    }
+
+    // trim consumed bytes — keep tail from the last incomplete start (or last 64 bytes)
+    if (start !== -1) {
+      buffer = buffer.slice(start);
+    } else if (buffer.length > 256) {
+      buffer = buffer.slice(buffer.length - 64);
+    }
+  }
+
+  function parseFrame(frame) {
+    if (frame.length < 3) return;
+    const type = frame[0];
+    const len = frame[1];
+    if (frame.length < 2 + len + 1) return;
+    const digits = frame.slice(2, 2 + len);
+    const checksum = frame[2 + len];
+
+    let sum = 0;
+    for (const b of digits) sum = (sum + b) & 0xFF;
+    if (sum !== checksum) {
+      log('Checksum mismatch — ignoring frame', 'err');
+      return;
+    }
+
+    // digits are ASCII '0'..'9', reversed
+    let n = 0;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      const d = digits[i] - 0x30;
+      if (d < 0 || d > 9) return;
+      n = n * 10 + d;
+    }
+
+    if (type === 0x41) updateCadence(n);
+    else if (type === 0x44) updateResistance(n);
+    else if (type === 0x4A) updatePower(n / 10);
+  }
+
+  // -------- Metric updates --------
+  let lastCadence = 0, lastResistance = 0, lastPower = 0;
+
+  function updateCadence(rpm) {
+    lastCadence = rpm;
+    cadenceEl.textContent = rpm;
+    updateSpeed();
+    recordSample();
+  }
+  function updateResistance(raw) {
+    // raw is 0–100 already on most original bikes; clamp just in case
+    const pct = Math.max(0, Math.min(100, raw));
+    lastResistance = pct;
+    resistanceEl.textContent = pct;
+    updateSpeed();
+    recordSample();
+  }
+  function updatePower(watts) {
+    lastPower = watts;
+    powerEl.textContent = Math.round(watts);
+    session.powerSum += watts;
+    session.powerCount += 1;
+    recordSample();
+  }
+
+  // Rough speed estimate: Peloton bikes don't transmit speed directly.
+  // Approx: speed_mph = (cadence * gear_factor * resistance_factor)
+  // Use a simple empirical formula — good enough for a personal display.
+  function updateSpeed() {
+    const mph = (lastCadence / 100) * (1 + lastResistance / 50) * 4;
+    speedEl.textContent = mph.toFixed(1);
+  }
+
+  function recordSample() {
+    if (!session.startTime) return;
+    const now = Date.now();
+    const t = (now - session.startTime) / 1000;
+
+    // throttle samples to 1 per ~250ms
+    const last = session.samples[session.samples.length - 1];
+    if (last && (t - last.t) < 0.25) return;
+
+    session.samples.push({
+      t: +t.toFixed(2),
+      cadence: lastCadence,
+      resistance: lastResistance,
+      power: +lastPower.toFixed(1),
+    });
+
+    // distance + calories integration
+    const dt = (now - session.lastSampleTime) / 1000 / 3600; // hours
+    session.lastSampleTime = now;
+    const mph = parseFloat(speedEl.textContent);
+    session.distanceMi += mph * dt;
+    // ~3.6 kcal per Wh for cycling efficiency
+    session.calories += (lastPower * (dt * 3600) / 3600) * 3.6;
+
+    updateTotals();
+  }
+
+  function updateTotals() {
+    const elapsed = session.startTime
+      ? Math.floor((Date.now() - session.startTime) / 1000) : 0;
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    elapsedEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    distanceEl.textContent = session.distanceMi.toFixed(2) + ' mi';
+    caloriesEl.textContent = Math.round(session.calories);
+    const avg = session.powerCount > 0 ? session.powerSum / session.powerCount : 0;
+    avgPowerEl.textContent = Math.round(avg) + ' W';
+  }
+
+  // tick the clock every second
+  setInterval(() => { if (session.startTime) updateTotals(); }, 1000);
+</script>
+</body>
+</html>

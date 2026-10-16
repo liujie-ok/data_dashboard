@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TELEMETRY // HUD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="scanlines"></div>
+
+  <header>
+    <div class="header-left">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">OFFLINE</span>
+    </div>
+    <h1>TELEMETRY <span class="accent">// HUD</span></h1>
+    <div class="header-right">
+      <span class="timestamp" id="clock">00:00:00</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Primary Trackers -->
+    <div class="primary-trackers">
+      <div class="tracker-card tracker-speed">
+        <div class="tracker-label">VELOCITY</div>
+        <div class="tracker-value" id="velocity">0.0</div>
+        <div class="tracker-unit">MPH</div>
+        <div class="tracker-bar-wrap"><div class="tracker-bar" id="speedBar"></div></div>
+      </div>
+
+      <div class="tracker-card tracker-accel" id="currentAccelCard">
+        <div class="tracker-label">ACCELERATION</div>
+        <div class="tracker-value" id="currentAccel">0.00</div>
+        <div class="tracker-unit">G &nbsp;<span class="tracker-unit-sub">derived</span></div>
+        <div class="tracker-bar-wrap"><div class="tracker-bar accel-bar" id="accelBar"></div></div>
+      </div>
+    </div>
+
+    <!-- Secondary Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">MAX SPEED</div>
+        <div class="stat-value" id="maxSpeed">0.0<span class="stat-unit">mph</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">MAX ACCEL</div>
+        <div class="stat-value" id="maxAccel">0.000<span class="stat-unit">g</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">MAX BRAKE</div>
+        <div class="stat-value" id="maxBrake">0.000<span class="stat-unit">g</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">DISTANCE</div>
+        <div class="stat-value" id="distanceMiles">0.00<span class="stat-unit">mi</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">HEADING</div>
+        <div class="stat-value" id="currentHeading">0<span class="stat-unit">°</span></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-container">
+      <div class="chart-wrapper">
+        <div class="chart-header">
+          <span class="chart-title">SPEED <span class="accent">// mph</span></span>
+        </div>
+        <canvas id="speedChart"></canvas>
+      </div>
+
+      <div class="chart-wrapper">
+        <div class="chart-header">
+          <span class="chart-title">ACCELERATION <span class="accent">// g (derived)</span></span>
+        </div>
+        <canvas id="accelChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button id="btnStart">&#9654; START</button>
+      <button id="btnStop" class="btn-stop">&#9646;&#9646; STOP</button>
+      <button id="btnNewLog" class="btn-log">&#9679; NEW LOG</button>
+      <button id="btnStopLog">STOP LOG</button>
+      <button class="btn-warning" id="btnResetStats">&#8635; RESET</button>
+      <button class="btn-danger" id="btnDeleteLogs">&#9249; PURGE LOGS</button>
+      <span class="csv-label" id="currentFile">LOG: none</span>
+    </div>
+
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

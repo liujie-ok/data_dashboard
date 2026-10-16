@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<!--
+  Data Live Dashboard 页面入口。
+  本文件只描述页面结构与控件 ID；样式集中在 style.css，交互逻辑在 app.js。
+  请勿随意更改被 app.js 引用的 id，除非同步更新脚本中的 elements 映射。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Live Dashboard</title>
+  <!-- Chart.js：提供实时速度曲线和三张可缩放的数据分析折线图。 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- 全局样式、单屏布局、控制面板尺寸和响应式规则。 -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 头部区域：包含标题与界面切换导航 -->
+  <header>
+    <h1>DATA <span>LIVE</span></h1>
+    
+    <!-- 导航切换选项卡 -->
+    <nav class="nav-tabs">
+      <button type="button" class="tab-btn active" data-target="telemetryPage">遥测界面</button>
+      <button type="button" class="tab-btn" data-target="analyticsPage">数据分析</button>
+      <button type="button" class="tab-btn" data-target="settingsPage">参数设置</button>
+      <!-- 使用内嵌 SVG 图标，表示赛道/路线；按钮放在参数设置后面。 -->
+      <button type="button" class="tab-btn track-nav-btn" data-target="trackPage" title="赛道显示" aria-label="赛道显示">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 19.5 8.2 5.8a2 2 0 0 1 3.8-.1l2 5.1a2 2 0 0 0 3.8-.1L20 4.5" />
+          <circle cx="4" cy="19.5" r="2" />
+          <circle cx="20" cy="4.5" r="2" />
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <!-- 主内容区域（单屏自适应） -->
+  <main>
+    <!-- 浏览器兼容性提示 -->
+    <div class="unsupported" id="unsupported">
+      您的浏览器不支持 Web Serial API。请使用桌面版的 Chrome、Edge 或 Opera 浏览器。
+    </div>
+
+    <!-- 1. 遥测界面 (默认激活) -->
+    <section id="telemetryPage" class="page-container active">
+      <!-- 实时遥测指标：数值由串口协议帧更新，不直接读取硬件传感器。 -->
+      <div class="grid">
+        <div class="metric">
+          <div class="label">转速</div>
+          <div class="value" id="cadence">0</div>
+          <div class="unit">RPM</div>
+        </div>
+        <div class="metric">
+          <div class="label">油门</div>
+          <div class="value" id="resistance">0</div>
+          <div class="unit">%</div>
+        </div>
+        <div class="metric">
+          <div class="label">功率</div>
+          <div class="value" id="power">0</div>
+          <div class="unit">WATTS</div>
+        </div>
+        <div class="metric">
+          <div class="label">速度</div>
+          <div class="value" id="speed">0.0</div>
+          <div class="unit">km/h</div>
+        </div>
+      </div>
+
+      <!-- 记录统计卡片：在记录期间更新运行时间、距离、能量和平均功率。 -->
+      <div class="totals">
+        <div class="item">
+          <div class="label">用时</div>
+          <div class="value" id="elapsed">00:00</div>
+        </div>
+        <div class="item">
+          <div class="label">距离</div>
+          <div class="value" id="distance">0.00 km</div>
+        </div>
+        <div class="item">
+          <div class="label">能耗</div>
+          <div class="value" id="calories">0.00 Wh</div>
+        </div>
+        <div class="item">
+          <div class="label">平均功率</div>
+          <div class="value" id="avgPower">0 W</div>
+        </div>
+      </div>
+
+      <!-- 实时速度曲线：由 app.js 使用 Chart.js 初始化，串口断流时停止追加新点。 -->
+      <div class="chart-panel">
+        <h3>速度变化曲线</h3>
+        <div class="chart-wrapper">
+          <canvas id="speedChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 串口操作区：连接成功后才允许开始记录和导出 CSV。 -->
+      <div class="controls-panel">
+        <div class="status">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">未连接</span>
+        </div>
+        <div class="serial-info" id="log">等待设备连接...</div>
+        <div class="baud-selector">
+          <label for="baudRate">波特率:</label>
+          <select id="baudRate">
+            <option value="9600">9600</option>
+            <option value="19200" selected>19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button type="button" id="connectBtn">连接设备</button>
+          <button type="button" id="disconnectBtn" class="secondary" disabled>断开连接</button>
+          <button type="button" id="toggleRideBtn" class="start-btn" disabled title="请先成功连接串口设备">开始记录</button>
+          <button type="button" id="exportBtn" class="secondary" disabled title="请先成功连接串口设备">导出 CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 数据分析界面 -->
+    <section id="analyticsPage" class="page-container">
+      <!-- 分析图表区：三张图共用第一列时间标签，并同步缩放与双击复位。 -->
+      <div class="analytics-charts-grid">
+        <div class="chart-panel analytics-single-chart">
+          <div class="chart-header-select">
+            <select id="chart1Select" class="analytics-column-select" disabled>
+              <option value="">请先加载 CSV 文件</option>
+            </select>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="analyticsChart1"></canvas>
+          </div>
+        </div>
+        <div class="chart-panel analytics-single-chart">
+          <div class="chart-header-select">
+            <select id="chart2Select" class="analytics-column-select" disabled>
+              <option value="">请先加载 CSV 文件</option>
+            </select>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="analyticsChart2"></canvas>
+          </div>
+        </div>
+        <div class="chart-panel analytics-single-chart">
+          <div class="chart-header-select">
+            <select id="chart3Select" class="analytics-column-select" disabled>
+              <option value="">请先加载 CSV 文件</option>
+            </select>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="analyticsChart3"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- CSV 导入区：隐藏真实 file input，由可见按钮触发系统选文件窗口。 -->
+      <div class="controls-panel">
+        <input type="file" id="csvFileInput" accept=".csv" style="display: none;" />
+        <button type="button" class="status file-trigger-status" id="fileTriggerStatus" title="点击选择 CSV 文件" aria-label="选择 CSV 文件">
+          <span class="dot" id="fileStatusDot" style="background: var(--muted);"></span>
+          <span id="fileStatusText">选择 CSV 文件</span>
+        </button>
+        <div class="serial-info file-info-text" id="fileInfoText">
+          尚未选择任何历史骑行 CSV 文件...
+        </div>
+        <div class="btn-group">
+          <button type="button" id="loadCsvBtn">加载并分析</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 参数设置界面 -->
+    <section id="settingsPage" class="page-container">
+      <!-- 参数输入网格：各输入框的 ID 与 app.js 的参数定义一一对应。 -->
+      <div class="grid settings-grid-2x4">
+        <div class="metric">
+          <div class="label">最大转速</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxCadence" value="0" class="param-input">
+          </div>
+          <div class="unit">RPM</div>
+        </div>
+        <div class="metric">
+          <div class="label">最大油门</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxResistance" value="0" class="param-input">
+          </div>
+          <div class="unit">%</div>
+        </div>
+        <div class="metric">
+          <div class="label">最大功率</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxPower" value="0" class="param-input">
+          </div>
+          <div class="unit">WATTS</div>
+        </div>
+        <div class="metric">
+          <div class="label">最大速度</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxSpeed" value="0.0" step="0.1" class="param-input">
+          </div>
+          <div class="unit">km/h</div>
+        </div>
+        <div class="metric">
+          <div class="label">最大相电流</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxPhaseCurrent" value="0" class="param-input">
+          </div>
+          <div class="unit">UNIT</div>
+        </div>
+        <div class="metric">
+          <div class="label">最大电池电流</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="maxBatteryCurrent" value="0" class="param-input">
+          </div>
+          <div class="unit">UNIT</div>
+        </div>
+        <div class="metric">
+          <div class="label">PWM频率</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="pwmFrequency" value="0" class="param-input">
+          </div>
+          <div class="unit">UNIT</div>
+        </div>
+        <div class="metric">
+          <div class="label">电流增益</div>
+          <div class="input-value-wrapper">
+            <input type="number" id="currentGain" value="0" class="param-input">
+          </div>
+          <div class="unit">UNIT</div>
+        </div>
+      </div>
+
+      <!-- 预留说明卡片：用于后续补充设备信息、轮径校准等设置项。 -->
+      <div class="content-card">
+        <h2>设备与串口参数设置</h2>
+        <p>在此处配置串口高级参数、轮径校准参数以及提示音偏好。</p>
+      </div>
+
+      <!-- 参数页的串口控制区：可连接设备、读取参数及写入参数。 -->
+      <div class="controls-panel">
+        <div class="status">
+          <span class="dot" id="statusDot2"></span>
+          <span id="statusText2">未连接</span>
+        </div>
+        <div class="serial-info" id="log2">等待设备连接...</div>
+        <div class="baud-selector">
+          <label for="baudRate2">波特率:</label>
+          <select id="baudRate2">
+            <option value="9600">9600</option>
+            <option value="19200" selected>19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button type="button" id="connectBtn2">连接设备</button>
+          <button type="button" id="disconnectBtn2" class="secondary" disabled>断开连接</button>
+          <button type="button" id="readParamsBtn" class="start-btn">读取参数</button>
+          <button type="button" id="writeParamsBtn" class="secondary">写入参数</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 赛道显示界面：顶部绘制赛道与设备位置，下方用较矮的曲线图查看实时数据。 -->
+    <section id="trackPage" class="page-container track-page">
+      <div class="track-page-layout">
+        <!-- 赛道窗口：必须手动加载 CSV 或 GPX 赛道文件后才会绘制路线。 -->
+        <section class="chart-panel track-map-panel" aria-label="赛道地图窗口">
+          <div class="track-panel-header">
+            <div class="track-panel-title">
+              <h2>赛道窗口</h2>
+              <span id="trackFileStatus" class="track-file-status">尚未加载赛道数据</span>
+            </div>
+            <div class="track-actions">
+              <input type="file" id="trackFileInput" accept=".csv,.gpx,text/csv,application/gpx+xml" hidden>
+              <button type="button" id="loadTrackBtn">加载赛道数据文件</button>
+              <button type="button" id="refreshPositionBtn" class="secondary" disabled>刷新设备位置</button>
+            </div>
+          </div>
+          <div class="track-map-wrapper">
+            <canvas id="trackCanvas" aria-label="赛道路径与设备当前位置"></canvas>
+            <div id="trackEmptyState" class="track-empty-state">
+              <span class="track-empty-icon" aria-hidden="true">↗</span>
+              <strong>尚未加载赛道</strong>
+              <span>点击“加载赛道数据文件”，选择包含经纬度的 CSV 或 GPX 文件。</span>
+            </div>
+          </div>
+          <div class="track-map-footer">
+            <span><i class="map-legend route-legend"></i>赛道路线</span>
+            <span><i class="map-legend start-legend"></i>起点</span>
+            <span><i class="map-legend device-legend"></i>设备位置</span>
+            <span id="trackPositionReadout" class="track-position-readout">等待设备 GPS 数据</span>
+          </div>
+        </section>
+
+        <!-- 实时曲线：下拉框可切换海拔或遥测页面的实时指标。 -->
+        <section class="chart-panel track-chart-panel" aria-label="设备实时数据变化曲线">
+          <div class="track-chart-header">
+            <h2>数据变化曲线</h2>
+            <label for="trackSeriesSelect">显示数据</label>
+            <select id="trackSeriesSelect">
+              <option value="altitude">设备当前高度（m）</option>
+              <option value="cadence">转速（RPM）</option>
+              <option value="resistance">油门（%）</option>
+              <option value="power">功率（W）</option>
+              <option value="speed" selected>速度（km/h）</option>
+            </select>
+          </div>
+          <div class="chart-wrapper track-chart-wrapper">
+            <canvas id="trackDataChart"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <!-- 赛道页复用同一个 SerialManager；这里的按钮是遥测界面串口操作区的另一组入口。 -->
+      <div class="controls-panel track-controls-panel">
+        <div class="status">
+          <span class="dot" id="statusDot3"></span>
+          <span id="statusText3">未连接</span>
+        </div>
+        <div class="serial-info" id="log3">等待设备连接...</div>
+        <div class="baud-selector">
+          <label for="baudRate3">波特率:</label>
+          <select id="baudRate3">
+            <option value="9600">9600</option>
+            <option value="19200" selected>19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button type="button" id="connectBtn3">连接设备</button>
+          <button type="button" id="disconnectBtn3" class="secondary" disabled>断开连接</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 脚本依赖顺序不可随意调整：协议与串口模块必须先于 app.js 加载。 -->
+  <script src="protocol.js"></script>
+  <script src="serial-manager.js"></script>
+  <script src="csv-utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

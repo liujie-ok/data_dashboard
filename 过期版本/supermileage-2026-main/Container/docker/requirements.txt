@@ -1,0 +1,7 @@
+flask
+pyserial
+numpy
+pandas
+matplotlib
+scipy
+python-dotenv

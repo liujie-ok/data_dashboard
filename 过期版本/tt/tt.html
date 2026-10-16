@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Racing Live Dashboard</title>
+<!-- 【关键】把 CSS 文件引入进来，让网页穿上衣服 -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>PELOTON <span>LIVE</span></h1>
+  <div class="controls">
+    <span class="status"><span class="dot" id="statusDot"></span><span id="statusText">Disconnected</span></span>
+    <button id="connectBtn">Connect Bike</button>
+    <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+    <button id="resetBtn" class="secondary">Reset Totals</button>
+    <button id="exportBtn" class="secondary">Export CSV</button>
+  </div>
+</header>
+
+<main>
+  <div class="unsupported" id="unsupported">
+    Your browser does not support the Web Serial API. Please use Chrome, Edge, or Opera (desktop).
+  </div>
+
+  <div class="grid">
+    <div class="metric">
+      <div class="label">Cadence</div>
+      <div class="value" id="cadence">0</div>
+      <div class="unit">RPM</div>
+    </div>
+    <div class="metric">
+      <div class="label">Resistance</div>
+      <div class="value" id="resistance">0</div>
+      <div class="unit">%</div>
+    </div>
+    <div class="metric">
+      <div class="label">Power</div>
+      <div class="value" id="power">0</div>
+      <div class="unit">WATTS</div>
+    </div>
+    <div class="metric">
+      <div class="label">Speed</div>
+      <div class="value" id="speed">0.0</div>
+      <div class="unit">MPH</div>
+    </div>
+  </div>
+
+  <div class="totals">
+    <div class="item">
+      <div class="label">Time</div>
+      <div class="value" id="elapsed">00:00</div>
+    </div>
+    <div class="item">
+      <div class="label">Distance</div>
+      <div class="value" id="distance">0.00 mi</div>
+    </div>
+    <div class="item">
+      <div class="label">Calories</div>
+      <div class="value" id="calories">0</div>
+    </div>
+    <div class="item">
+      <div class="label">Avg Power</div>
+      <div class="value" id="avgPower">0 W</div>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <h3>Serial Log</h3>
+    <div id="log"></div>
+  </div>
+
+  <div class="footer-note">
+    Connect a 3.3V USB-to-TTL adapter to the bike's data cable
+    (TX→RX, RX→TX, GND→GND). Default baud: <code>19200</code>.
+  </div>
+</main>
+
+
+<!-- 【关键】把 JS 文件引入进来，让网页拥有大脑 -->
+    <script src="script.js"></script>
+</body>
+</html>

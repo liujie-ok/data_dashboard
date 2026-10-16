@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>单片机串口实时数据监控（暗黑全屏版）</title>
+  <!-- 引入 Chart.js 图表库 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* 1. 全局重置与暗黑背景锁定 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden; /* 严禁滚动条 */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121212; /* 深黑底色 */
+      color: #e0e0e0;            /* 主文字浅灰 */
+    }
+
+    /* 2. 主容器 Flex 垂直布局 */
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    /* 顶部标题区 */
+    header {
+      flex: 0 0 auto;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 1.5rem;
+      color: #ffffff;
+      letter-spacing: 1px;
+    }
+
+    /* 深色卡片基础面板 */
+    .card {
+      background: #1e1e1e; /* 稍亮的深灰卡片背景 */
+      border: 1px solid #2d2d2d;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* 控制面板 */
+    .controls-card {
+      flex: 0 0 auto;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    button {
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    #btnStart { background-color: #28a745; color: white; }
+    #btnStart:hover { background-color: #218838; }
+    #btnStop { background-color: #dc3545; color: white; }
+    #btnStop:hover { background-color: #c82333; }
+    button:disabled {
+      background-color: #333333 !important;
+      color: #666666 !important;
+      cursor: not-allowed;
+    }
+
+    /* 状态标签 */
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .status-off { background: #333333; color: #aaa; }
+    .status-on { background: #1b4d2e; color: #75b798; }
+
+    /* 数据读数展示区 */
+    .data-card {
+      flex: 0 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .data-title {
+      font-size: 15px;
+      color: #888888;
+    }
+    /* 霓虹蓝高亮数字 */
+    .data-display {
+      font-size: 2.2em;
+      font-weight: bold;
+      color: #00f0ff;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* 3. 自适应图表区域 */
+    .chart-card {
+      flex: 1;
+      min-height: 0; /* 防界溢出 */
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-box {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- 1. 标题区 -->
+    <header>
+      <h1>📡 单片机串口实时数据监控（暗黑终端）</h1>
+    </header>
+
+    <!-- 2. 控制面板 -->
+    <div class="card controls-card">
+      <button id="btnStart">启动模拟串口</button>
+      <button id="btnStop" disabled>停止接收</button>
+      <span>通信状态：<span id="status" class="status-badge status-off">未连接</span></span>
+    </div>
+
+    <!-- 3. 数据读数显示 -->
+    <div class="card data-card">
+      <div class="data-title">当前传感器实时读数：</div>
+      <div id="latestValue" class="data-display">--.--</div>
+    </div>
+
+    <!-- 4. 暗色调 Chart.js 实时图表 -->
+    <div class="card chart-card">
+      <div class="chart-box">
+        <canvas id="realtimeChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let timer = null;
+    let stepCount = 0;
+    const maxDataPoints = 30;
+
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const statusEl = document.getElementById('status');
+    const latestValueEl = document.getElementById('latestValue');
+
+    // 初始化 Chart.js 折线图（适应暗黑模式）
+    const ctx = document.getElementById('realtimeChart').getContext('2d');
+    
+    // 创建暗色渐变背景
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, 'rgba(0, 240, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: '传感器数值',
+          data: [],
+          borderColor: '#00f0ff',              // 青色霓虹折线
+          backgroundColor: gradient,           // 渐变透明填充
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: '#00f0ff',
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          x: {
+            grid: { color: '#2a2a2a' },        // 深色网格线
+            ticks: { color: '#888888' },       // X 轴文字浅灰
+            title: { display: true, text: '时间', color: '#888888' }
+          },
+          y: {
+            grid: { color: '#2a2a2a' },        // 深色网格线
+            ticks: { color: '#888888' },       // Y 轴文字浅灰
+            suggestedMin: 20,
+            suggestedMax: 80,
+            title: { display: true, text: '数值', color: '#888888' }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: { color: '#cccccc' }        // 图例字体颜色
+          }
+        }
+      }
+    });
+
+    function addDataToChart(timeStr, value) {
+      chart.data.labels.push(timeStr);
+      chart.data.datasets[0].data.push(value);
+
+      if (chart.data.labels.length > maxDataPoints) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+
+      chart.update();
+    }
+
+    function generateSimulatedData() {
+      stepCount += 0.2;
+      const baseValue = 50 + 20 * Math.sin(stepCount);
+      const noise = (Math.random() - 0.5) * 4;
+      const finalValue = parseFloat((baseValue + noise).toFixed(2));
+
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0] + '.' + Math.floor(now.getMilliseconds() / 100);
+
+      latestValueEl.textContent = finalValue.toFixed(2);
+      addDataToChart(timeStr, finalValue);
+    }
+
+    btnStart.addEventListener('click', () => {
+      statusEl.textContent = '已连接';
+      statusEl.className = 'status-badge status-on';
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      timer = setInterval(generateSimulatedData, 200);
+    });
+
+    btnStop.addEventListener('click', () => {
+      clearInterval(timer);
+      timer = null;
+      statusEl.textContent = '已断开';
+      statusEl.className = 'status-badge status-off';
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Telemetry Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    header {
+      background: #007acc;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.8em;
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* Stats Grid */
+    .stats-section {
+      margin-bottom: 30px;
+    }
+
+    .stats-section h2 {
+      margin-bottom: 15px;
+      color: #007acc;
+      border-bottom: 2px solid #007acc;
+      padding-bottom: 5px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #007acc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .stat-card.highlight {
+      border-left-color: #dc3545;
+      background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3); }
+      50% { box-shadow: 0 4px 16px rgba(220, 53, 69, 0.5); }
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #007acc;
+      line-height: 1.2;
+    }
+
+    .stat-unit {
+      font-size: 14px;
+      color: #666;
+      margin-left: 3px;
+      font-weight: normal;
+    }
+
+    /* Charts Section */
+    .charts-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .chart-wrapper {
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .chart-wrapper h3 {
+      margin: 0 0 15px 0;
+      color: #007acc;
+      font-size: 1.1em;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 400px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+      align-items: center;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .controls button {
+      padding: 10px 15px;
+      font-size: 0.9em;
+      border: none;
+      border-radius: 5px;
+      background: #007acc;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-weight: 600;
+    }
+
+    .controls button:hover {
+      background: #005f99;
+    }
+
+    .controls button.danger {
+      background: #dc3545;
+    }
+
+    .controls button.danger:hover {
+      background: #c82333;
+    }
+
+    .controls button.warning {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .controls button.warning:hover {
+      background: #e0a800;
+    }
+
+    .controls span {
+      margin-left: 10px;
+      font-weight: bold;
+    }
+
+    .info {
+      margin-top: 30px;
+      padding: 15px;
+      background: #eef6fc;
+      border-left: 4px solid #007acc;
+      border-radius: 5px;
+    }
+
+    .info h2 {
+      margin-top: 0;
+    }
+
+    .info ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    /* Legend boxes */
+    .legend-boxes {
+      display: flex;
+      gap: 15px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .legend-box {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .color-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 900px) {
+      .charts-container {
+        grid-template-columns: 1fr;
+      }
+      
+      .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard</h1>
+  </header>
+
+  <main>
+    <!-- Derived Telemetry Stats -->
+    <div class="stats-section">
+      <h2>Performance Metrics</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Max Acceleration</div>
+          <div class="stat-value" id="maxAccel">0.00<span class="stat-unit">g</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Max Braking</div>
+          <div class="stat-value" id="maxBrake">0.00<span class="stat-unit">g</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Max Lateral</div>
+          <div class="stat-value" id="maxLateral">0.00<span class="stat-unit">g</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Velocity</div>
+          <div class="stat-value" id="velocity">0.0<span class="stat-unit">mph</span></div>
+        </div>
+        <div class="stat-card" id="zeroToSixtyCard">
+          <div class="stat-label">0-60 mph Time</div>
+          <div class="stat-value" id="zeroToSixty">--<span class="stat-unit">s</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Corners</div>
+          <div class="stat-value" id="totalCorners">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Braking Events</div>
+          <div class="stat-value" id="totalBraking">0</div>
+        </div>
+        <div class="stat-card" id="currentAccelCard">
+          <div class="stat-label">Current Accel</div>
+          <div class="stat-value" id="currentAccel">0.00<span class="stat-unit">g</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-container">
+      <div class="chart-wrapper">
+        <h3>Real-Time Acceleration</h3>
+        <canvas id="accelChart"></canvas>
+        <div class="legend-boxes">
+          <div class="legend-box"><div class="color-box" style="background:red"></div> Ax (Longitudinal)</div>
+          <div class="legend-box"><div class="color-box" style="background:green"></div> Ay (Lateral)</div>
+          <div class="legend-box"><div class="color-box" style="background:blue"></div> Az (Vertical)</div>
+        </div>
+      </div>
+
+      <div class="chart-wrapper">
+        <h3>G-G Diagram (Traction Circle)</h3>
+        <canvas id="ggChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button onclick="startReader()">▶ Start</button>
+      <button onclick="stopReader()">⏸ Stop</button>
+      <button onclick="startLogging()">New CSV Log</button>
+      <button onclick="stopLogging()">Stop Logging</button>
+      <button class="warning" onclick="resetStats()">Reset Stats</button>
+      <button class="danger" onclick="deleteLogs()">Delete All Logs</button>
+      <span id="status" style="margin-left:10px;">Status: unknown</span>
+      <br>
+      <span id="currentFile">Current CSV: none</span>
+    </div>
+
+    <div class="info">
+      <h2>How to Use:</h2>
+      <ul>
+        <li><strong>Start:</strong> Begin receiving and plotting telemetry data. Data will appear on the chart in real time.</li>
+        <br>
+        <li><strong>Stop:</strong> Pause data reception and plotting. The reader thread stops temporarily.</li>
+        <br>
+        <li><strong>New CSV Log:</strong> Start logging data to a new CSV file with a timestamped filename. Also resets performance statistics.</li>
+        <br>
+        <li><strong>Stop Logging:</strong> Stop writing to the current CSV file. Plotting continues uninterrupted.</li>
+        <br>
+        <li><strong>Reset Stats:</strong> Reset all performance metrics (max g-forces, velocity, 0-60 timer, event counts) without stopping logging.</li>
+        <br>
+        <li><strong>Delete All Logs:</strong> Permanently remove all CSV files from the logs folder. Use with caution!</li>
+        <br>
+        <li><strong>Performance Metrics:</strong> The dashboard shows real-time derived telemetry including max g-forces, estimated velocity, 0-60 mph time (when accelerating hard), and event detection for corners and braking.</li>
+        <br>
+        <li><strong>G-G Diagram:</strong> Shows your vehicle's acceleration envelope - the outer boundary represents maximum performance in different directions.</li>
+      </ul>
+    </div>
+  </main>
+
+<script>
+  // ----- Reader control -----
+  async function startReader() {
+    await fetch("/api/start", { method: "POST" });
+    updateStatus();
+  }
+
+  async function stopReader() {
+    await fetch("/api/stop", { method: "POST" });
+    updateStatus();
+  }
+
+  // ----- Logging control -----
+  async function startLogging() {
+    try {
+      const res = await fetch("/api/start_log", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("currentFile").innerText = "Current CSV: " + data.file;
+      alert("Started new CSV log: " + data.file);
+    } catch (err) {
+      console.error("Error starting CSV log:", err);
+    }
+  }
+
+  async function stopLogging() {
+    try {
+      const res = await fetch("/api/stop_log", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("currentFile").innerText = "Current CSV: none";
+      alert("CSV logging stopped.");
+    } catch (err) {
+      console.error("Error stopping CSV log:", err);
+    }
+  }
+
+  async function deleteLogs() {
+    if (!confirm("Are you sure you want to delete all CSV logs?")) return;
+    try {
+      const res = await fetch("/api/delete_logs", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("currentFile").innerText = "Current CSV: none";
+      alert(`Deleted ${data.files.length} CSV files.`);
+      updateStatus();
+    } catch (err) {
+      console.error("Error deleting logs:", err);
+    }
+  }
+
+  async function resetStats() {
+    if (!confirm("Reset all performance statistics?")) return;
+    try {
+      await fetch("/api/reset_stats", { method: "POST" });
+      alert("Performance statistics reset.");
+    } catch (err) {
+      console.error("Error resetting stats:", err);
+    }
+  }
+
+  // ----- Status display -----
+  async function updateStatus() {
+    try {
+      const res = await fetch("/api/status");
+      const data = await res.json();
+      document.getElementById("status").innerText =
+        "Status: " + (data.running ? "RUNNING" : "STOPPED");
+    } catch (err) {
+      console.error("Error fetching status:", err);
+    }
+  }
+  setInterval(updateStatus, 1000);
+
+  // ----- Update Derived Telemetry Stats -----
+  async function updateStats() {
+    try {
+      const statsResp = await fetch('/api/stats');
+      const stats = await statsResp.json();
+      
+      // Update stat cards
+      document.getElementById('maxAccel').innerHTML = `${stats.max_accel.toFixed(2)}<span class="stat-unit">g</span>`;
+      document.getElementById('maxBrake').innerHTML = `${stats.max_brake.toFixed(2)}<span class="stat-unit">g</span>`;
+      document.getElementById('maxLateral').innerHTML = `${stats.max_lateral.toFixed(2)}<span class="stat-unit">g</span>`;
+      document.getElementById('velocity').innerHTML = `${stats.velocity_mph.toFixed(1)}<span class="stat-unit">mph</span>`;
+      document.getElementById('totalCorners').textContent = stats.total_corners;
+      document.getElementById('totalBraking').textContent = stats.total_braking_events;
+      
+      // 0-60 time
+      const zeroSixtyCard = document.getElementById('zeroToSixtyCard');
+      if (stats.zero_to_sixty_time) {
+        document.getElementById('zeroToSixty').innerHTML = `${stats.zero_to_sixty_time.toFixed(2)}<span class="stat-unit">s</span>`;
+        zeroSixtyCard.classList.remove('highlight');
+      } else if (stats.zero_to_sixty_in_progress) {
+        document.getElementById('zeroToSixty').innerHTML = `...<span class="stat-unit">s</span>`;
+        zeroSixtyCard.classList.add('highlight');
+      } else {
+        document.getElementById('zeroToSixty').innerHTML = `--<span class="stat-unit">s</span>`;
+        zeroSixtyCard.classList.remove('highlight');
+      }
+      
+      // Current acceleration
+      const currentResp = await fetch('/api/current');
+      const current = await currentResp.json();
+      document.getElementById('currentAccel').innerHTML = `${current.ax.toFixed(2)}<span class="stat-unit">g</span>`;
+      
+      // Highlight current acceleration if in event
+      const currentCard = document.getElementById('currentAccelCard');
+      if (stats.in_braking || stats.in_corner) {
+        currentCard.classList.add('highlight');
+      } else {
+        currentCard.classList.remove('highlight');
+      }
+      
+      // Update G-G chart
+      const ggResp = await fetch('/api/gg_data');
+      const ggData = await ggResp.json();
+      ggChart.data.datasets[0].data = ggData.map(d => ({ x: d.ay, y: d.ax }));
+      ggChart.update('none');
+      
+    } catch (error) {
+      console.error('Stats update error:', error);
+    }
+  }
+  
+  // Update stats every 100ms
+  setInterval(updateStats, 100);
+</script>
+
+<script>
+  // ----- Acceleration Time Series Chart -----
+  const ctx = document.getElementById('accelChart').getContext('2d');
+
+  const data = {
+    labels: [], // timestamps
+    datasets: [
+      {
+        label: 'Ax',
+        data: [],
+        borderColor: 'red',
+        backgroundColor: 'rgba(255, 0, 0, 0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1
+      },
+      {
+        label: 'Ay',
+        data: [],
+        borderColor: 'green',
+        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1
+      },
+      {
+        label: 'Az',
+        data: [],
+        borderColor: 'blue',
+        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1
+      }
+    ]
+  };
+
+  const config = {
+    type: 'line',
+    data: data,
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        x: {
+          type: 'category', 
+          title: { display: true, text: 'Time (HH:MM:SS.mmm)' },
+          ticks: {
+            maxRotation: 45,
+            autoSkip: true,
+            maxTicksLimit: 10
+          }
+        },
+        y: {
+          type: 'linear',
+          title: { display: true, text: 'Acceleration (g)' }
+        }
+      },
+      plugins: {
+        legend: {
+          display: false
+        }
+      }
+    }
+  };
+
+  const accelChart = new Chart(ctx, config);
+
+  // ----- G-G Diagram Chart -----
+  const ggCtx = document.getElementById('ggChart').getContext('2d');
+  
+  const ggChart = new Chart(ggCtx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'G-G Data',
+        data: [],
+        backgroundColor: 'rgba(0, 122, 204, 0.4)',
+        borderColor: 'rgba(0, 122, 204, 0.8)',
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 1,
+      scales: {
+        x: {
+          title: { display: true, text: 'Lateral Acceleration (g)' },
+          min: -1.5,
+          max: 1.5,
+          grid: { color: '#ddd' }
+        },
+        y: {
+          title: { display: true, text: 'Longitudinal Acceleration (g)' },
+          min: -1.5,
+          max: 1.5,
+          grid: { color: '#ddd' }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  const MAX_POINTS = 200; // keep last 200 samples
+
+  async function fetchData() {
+    try {
+      const response = await fetch('/data');
+      const buffer = await response.json(); // expects [{timestamp, ax, ay, az}, ...]
+      
+      data.labels = buffer.map(d => {
+        return d.human_ts.slice(11);
+      });
+      data.datasets[0].data = buffer.map(d => d.ax);
+      data.datasets[1].data = buffer.map(d => d.ay);
+      data.datasets[2].data = buffer.map(d => d.az);
+
+      // Keep only last MAX_POINTS points
+      data.labels = data.labels.slice(-MAX_POINTS);
+      data.datasets.forEach(ds => ds.data = ds.data.slice(-MAX_POINTS));
+
+      accelChart.update('none');
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    }
+  }
+
+  // Poll server every 100ms
+  setInterval(fetchData, 100);
+  
+</script>
+
+</body>
+</html>
